@@ -1,14 +1,13 @@
 --  Sample employee database 
 --  See changelog table for details
 --  Copyright (C) 2007,2008, MySQL AB
---  
+
 --  Original data created by Fusheng Wang and Carlo Zaniolo
 --  http://www.cs.aau.dk/TimeCenter/software.htm
 --  http://www.cs.aau.dk/TimeCenter/Data/employeeTemporalDataSet.zip
--- 
+
 --  Current schema by Giuseppe Maxia 
 --  Data conversion from XML to relational by Patrick Crews
--- 
 -- This work is licensed under the 
 -- Creative Commons Attribution-Share Alike 3.0 Unported License. 
 -- To view a copy of this license, visit 
@@ -22,6 +21,7 @@
 --  Any similarity to existing people is purely coincidental.
 
 -- Source: https://www.dropbox.com/s/lhj4axkaupjhmbq/employees_mod.sql?dl=0
+
 USE employees_mod;
 
 # 1 - provide a breakdown between the male and female employees working in the company each year, starting from 1990
