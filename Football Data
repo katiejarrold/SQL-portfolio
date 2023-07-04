@@ -1,0 +1,208 @@
+-- Player Attributes
+-- alter date column format (TEXT to DATE)
+ALTER TABLE player_attributes
+CHANGE COLUMN date date DATE;
+
+ALTER TABLE matches
+CHANGE COLUMN date date DATE;
+
+-- player attributes
+SELECT
+	YEAR(pa.date) AS year,
+	p.player_api_id,
+    p.player_name,
+    t.team_long_name AS team,
+    l.name AS league,
+    c.name AS country,
+    p.height,
+    p.weight,
+    FLOOR(DATEDIFF(CURRENT_DATE, p.birthday) / 365.25) AS age,
+    pa.preferred_foot,
+    ROUND(AVG(pa.overall_rating),0) as overall_rating,
+    ROUND(AVG(pa.acceleration),0) AS acceleration,
+    ROUND(AVG(pa.agility),0) AS agility,
+    ROUND(AVG(pa.sprint_speed),0) AS sprint_speed,
+    ROUND(AVG(pa.strength),0) AS strength,
+    ROUND(AVG(pa.stamina),0) AS stamina,
+    ROUND(AVG(pa.shot_power),0) AS shot_power,
+    ROUND(AVG(pa.ball_control),0) AS ball_control,
+    ROUND(AVG(pa.reactions),0) AS reactions,
+    ROUND(AVG(pa.balance),0) AS balance
+FROM
+    player p
+JOIN 
+    player_attributes pa ON p.player_api_id = pa.player_api_id
+JOIN
+	Matches m ON m.home_player_1 = p.player_api_id
+JOIN
+	League l ON m.league_id = l.id
+JOIN
+	Country c ON l.country_id = c.id
+JOIN 
+	Team t ON m.home_team_api_id = t.team_api_id
+WHERE YEAR(pa.date) BETWEEN 2013 AND 2016
+GROUP BY 
+    YEAR(pa.date),
+    p.player_api_id,
+    p.player_name,
+    t.team_long_name,
+    l.name,
+    c.name,
+    p.height,
+    p.weight,
+    FLOOR(DATEDIFF(CURRENT_DATE, p.birthday) / 365.25),
+    pa.preferred_foot
+ORDER BY 
+	player_api_id,
+    year DESC;
+
+-- Team Attributes
+-- alter date column format (TEXT to DATE)
+ALTER TABLE team_attributes
+CHANGE COLUMN date date DATE;
+
+-- Team Attributes
+SELECT 
+    YEAR(ta.date) AS year,
+    t.team_api_id,
+    t.team_long_name AS team_name,
+    l.name AS league,
+    c.name AS country,
+    ROUND(AVG(ta.buildupplayspeed), 0) AS build_up_play_speed,
+    ROUND(AVG(ta.buildUpPlayDribbling), 0) AS build_up_play_dribbling,
+    ROUND(AVG(ta.buildupplaypassing), 0) AS build_up_play_passing,
+    ROUND(AVG(ta.chancecreationpassing), 0) AS chance_creation_passing,
+    ROUND(AVG(ta.chancecreationcrossing), 0) AS chance_creation_crossing,
+    ROUND(AVG(ta.chancecreationshooting), 0) AS chance_creation_shooting,
+    ROUND(AVG(ta.defencepressure), 0) AS defence_pressure,
+    ROUND(AVG(ta.defenceaggression), 0) AS defence_agression,
+    ROUND(AVG(ta.defenceteamwidth), 0) AS defence_team_width
+FROM
+    Team t
+        JOIN
+    team_attributes ta ON t.team_api_id = ta.team_api_id
+        JOIN
+    Matches m ON m.home_team_api_id = t.team_api_id
+        JOIN
+    League l ON m.league_id = l.id
+        JOIN
+    Country c ON l.country_id = c.id
+WHERE YEAR(ta.date) BETWEEN 2013 AND 2016
+GROUP BY YEAR(ta.date) , t.team_api_id , t.team_long_name , l.name , c.name
+ORDER BY t.team_api_id , YEAR(ta.date) DESC;
+
+-- League Results
+WITH team_stats AS (
+    SELECT 
+        t.team_long_name AS team,
+        l.name AS league,
+        m.season,
+        COUNT(CASE WHEN m.home_team_goal > m.away_team_goal THEN 'win' END) AS home_wins,
+        COUNT(CASE WHEN m.home_team_goal = m.away_team_goal THEN 'draw' END) AS home_draws,
+        COUNT(CASE WHEN m.home_team_goal < m.away_team_goal THEN 'loss' END) AS home_losses,
+        away_games.away_wins,
+        away_games.away_draws,
+        away_games.away_losses
+    FROM 
+        matches m
+    JOIN
+        Team t ON m.home_team_api_id = t.team_api_id
+    JOIN
+        League l ON m.league_id = l.id
+    LEFT JOIN (
+        SELECT 
+            t.team_long_name AS team,
+            l.name AS league,
+            m.season,
+            COUNT(CASE WHEN m.away_team_goal > m.home_team_goal THEN 'win' END) AS away_wins,
+            COUNT(CASE WHEN m.away_team_goal = m.home_team_goal THEN 'draw' END) AS away_draws,
+            COUNT(CASE WHEN m.away_team_goal < m.home_team_goal THEN 'loss' END) AS away_losses
+        FROM 
+            matches m
+        JOIN
+            Team t ON m.away_team_api_id = t.team_api_id
+        JOIN
+            League l ON m.league_id = l.id
+        GROUP BY 
+            t.team_long_name,
+            l.name,
+            m.season
+    ) AS away_games ON t.team_long_name = away_games.team AND l.name = away_games.league AND m.season = away_games.season
+    GROUP BY 
+        t.team_long_name,
+        l.name,
+        m.season,
+        away_games.away_wins,
+        away_games.away_draws,
+        away_games.away_losses
+)
+SELECT 
+    team_stats.team,
+    team_stats.league,
+    team_stats.season,
+    team_stats.home_wins,
+    team_stats.home_draws,
+    team_stats.home_losses,
+    team_stats.away_wins,
+    team_stats.away_draws,
+    team_stats.away_losses,
+    (team_stats.home_wins + team_stats.away_wins) * 3 + team_stats.home_draws + team_stats.away_draws AS points,
+    home_goals.total_home_goals + away_goals.total_away_goals AS total_goals,
+    ROW_NUMBER() OVER (PARTITION BY team_stats.league, team_stats.season ORDER BY (team_stats.home_wins + team_stats.away_wins) * 3 + team_stats.home_draws DESC) AS league_rank
+FROM 
+    team_stats
+JOIN (
+    SELECT
+        m.season,
+        t.team_long_name AS team,
+        l.name AS league,
+        SUM(m.home_team_goal) AS total_home_goals
+    FROM
+        matches m 
+    JOIN
+        team t ON t.team_api_id = m.home_team_api_id
+    JOIN 
+        League l ON m.league_id = l.id
+    GROUP BY
+        m.season,
+        t.team_long_name,
+        l.name
+) AS home_goals ON team_stats.season = home_goals.season AND team_stats.team = home_goals.team AND team_stats.league = home_goals.league
+JOIN (
+    SELECT
+        m.season,
+        t.team_long_name AS team,
+        l.name AS league,
+        SUM(m.away_team_goal) AS total_away_goals
+    FROM
+        matches m 
+    JOIN
+        team t ON t.team_api_id = m.away_team_api_id
+    JOIN 
+        League l ON m.league_id = l.id
+    GROUP BY
+        m.season,
+        t.team_long_name,
+        l.name
+) AS away_goals ON team_stats.season = away_goals.season AND team_stats.team = away_goals.team AND team_stats.league = away_goals.league;
+
+-- Goals Scored
+SELECT
+    m.season,
+    MONTHNAME(m.date) AS month,
+    t.team_long_name AS team,
+    l.name AS league,
+    SUM(m.home_team_goal) + SUM(m.away_team_goal) as total_goals
+FROM
+    matches m 
+JOIN
+    team t ON t.team_api_id = m.home_team_api_id
+JOIN 
+	team tt ON tt.team_api_id = m.away_team_api_id
+JOIN 
+    League l ON m.league_id = l.id
+GROUP BY
+    m.season,
+    MONTHNAME(m.date),
+    t.team_long_name,
+    l.name;
